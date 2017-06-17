@@ -110,7 +110,7 @@ func (w *Writer) WriteByte(v byte) error {
 	return w.writeByteToWriter(v)
 }
 
-// WriteByte writes a slice of bytes to the
+// WriteBytes writes a slice of bytes to the
 // underlying io.Writer, or byte slice.
 func (w *Writer) WriteBytes(v []byte) error {
 	if w.out != nil {
