@@ -223,7 +223,7 @@ func (r *Reader) readBytesFromReader(l int) ([]byte, error) {
 
 	b := make([]byte, l)
 
-	// Loop thropugh until we have filled the byte slice.
+	// Loop through until we have filled the byte slice.
 
 	for p := 0; l > 0; {
 
