@@ -16,6 +16,7 @@ package bump
 
 import (
 	"bytes"
+	"io"
 	"io/ioutil"
 	"testing"
 
@@ -80,6 +81,13 @@ func chunkWrite(w *Writer, bit []byte) {
 
 func TestReader(t *testing.T) {
 
+	Convey("Reader should EOF if data length not readable", t, func() {
+		b := bytes.NewReader(jpg)
+		r := NewReader(b)
+		_, e := r.ReadBytes(len(jpg) * 2)
+		So(e, ShouldEqual, io.EOF)
+	})
+
 	Convey("Reader should read small data from an io.Reader", t, func() {
 		b := bytes.NewReader(txt)
 		r := NewReader(b)
@@ -117,6 +125,12 @@ func TestReader(t *testing.T) {
 	})
 
 	// ----------------------------------------------------------------------------------------------------
+
+	Convey("Reader should EOF if data length not readable", t, func() {
+		r := NewReaderBytes(jpg)
+		_, e := r.ReadBytes(len(jpg) * 2)
+		So(e, ShouldEqual, io.EOF)
+	})
 
 	Convey("Reader should read small data from a byte slice", t, func() {
 		r := NewReaderBytes(txt)
