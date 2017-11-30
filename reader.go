@@ -91,6 +91,16 @@ func (r *Reader) ReadBytes(l int) ([]byte, error) {
 	return r.readBytesFromReader(l)
 }
 
+// ReadString reads the specified length
+// string from the underlying io.Reader, or
+// byte slice, and advances the position.
+func (r *Reader) ReadString(l int) (string, error) {
+	if r.out != nil {
+		return r.readStringFromBytes(l)
+	}
+	return r.readStringFromReader(l)
+}
+
 func (r *Reader) peekByteFromBytes() (byte, error) {
 
 	// Return an error if there is no more data.
@@ -150,6 +160,28 @@ func (r *Reader) readBytesFromBytes(l int) ([]byte, error) {
 	// Everything went ok.
 
 	return b, nil
+
+}
+
+func (r *Reader) readStringFromBytes(l int) (string, error) {
+
+	// Return an error if there is no more data.
+
+	if r.pos+l > len(r.out) {
+		return "", io.EOF
+	}
+
+	// Get the data from the byte slice.
+
+	b := r.out[r.pos : r.pos+l]
+
+	// Advance the buffer position.
+
+	r.pos += l
+
+	// Everything went ok.
+
+	return string(b), nil
 
 }
 
@@ -251,6 +283,49 @@ func (r *Reader) readBytesFromReader(l int) ([]byte, error) {
 	// Everything went ok.
 
 	return b, nil
+
+}
+
+func (r *Reader) readStringFromReader(l int) (string, error) {
+
+	// Initialise the underlying buffer if needed.
+
+	if r.buf == nil {
+		r.buf = r.arr[0:]
+	}
+
+	// Initialise the byte slice for returning.
+
+	b := make([]byte, l)
+
+	// Loop through until we have filled the byte slice.
+
+	for p := 0; l > 0; {
+
+		// Fill the buffer with data if there is not enough.
+
+		if r.sze == 0 || r.pos+l > r.sze {
+			err := r.fill()
+			if err != nil {
+				return "", err
+			}
+		}
+
+		// Get the data from the underlying buffer.
+
+		n := copy(b[p:], r.buf[r.pos:])
+
+		// Advance the buffer position.
+
+		r.pos += n
+		p += n
+		l -= n
+
+	}
+
+	// Everything went ok.
+
+	return string(b), nil
 
 }
 

@@ -30,6 +30,13 @@ type Writer struct {
 	arr [writerSize]byte
 }
 
+// stringer represents an io.Writer which
+// can write a string without conversion.
+
+type stringer interface {
+	WriteString(string) (int, error)
+}
+
 // NewWriter creates a new Writer which
 // writes to an underlying io.Writer.
 func NewWriter(w io.Writer) *Writer {
@@ -119,6 +126,15 @@ func (w *Writer) WriteBytes(v []byte) error {
 	return w.writeBytesToWriter(v)
 }
 
+// WriteString writes a string to the
+// underlying io.Writer, or byte slice.
+func (w *Writer) WriteString(v string) error {
+	if w.out != nil {
+		return w.writeStringToBytes(v)
+	}
+	return w.writeStringToWriter(v)
+}
+
 func (w *Writer) writeByteToBytes(v byte) error {
 
 	// Grow the underlying buffer if needed.
@@ -152,6 +168,38 @@ func (w *Writer) writeByteToBytes(v byte) error {
 }
 
 func (w *Writer) writeBytesToBytes(v []byte) error {
+
+	// Grow the underlying buffer if needed.
+
+	if w.pos+len(v) >= len(*w.out) {
+		if w.pos+len(v) < cap(*w.out) {
+			*w.out = (*w.out)[:w.pos+len(v)]
+		} else {
+			bs := make([]byte, len(*w.out)+len(v), len(*w.out)+len(v)+writerSize)
+			copy(bs, (*w.out)[:w.pos])
+			*w.out = bs
+		}
+	}
+
+	// Insert the specified bytes into the buffer.
+
+	n := copy((*w.out)[w.pos:], v)
+
+	// Increment the current buffer position.
+
+	w.pos += n
+
+	// Trim the slice to the correct length.
+
+	*w.out = (*w.out)[:w.pos]
+
+	// Everything went ok.
+
+	return nil
+
+}
+
+func (w *Writer) writeStringToBytes(v string) error {
 
 	// Grow the underlying buffer if needed.
 
@@ -247,6 +295,104 @@ func (w *Writer) writeBytesToWriter(v []byte) error {
 	// Insert any remaining bytes into the buffer.
 
 	n := copy(w.buf[w.pos:], v)
+
+	// Increment the current buffer position.
+
+	w.pos += n
+
+	// Everything went ok.
+
+	return nil
+
+}
+
+func (w *Writer) writeStringToWriter(s string) error {
+
+	// Attempt to write the string directly.
+
+	if i, ok := w.wtr.(stringer); ok {
+		return w.writeStringToStringer(i, s)
+	}
+
+	// Convert the string to a slice of bytes.
+
+	v := []byte(s)
+
+	// Initialise the underlying buffer if needed.
+
+	if w.buf == nil {
+		w.buf = w.arr[0:]
+	}
+
+	// Write directly to the underlying writer.
+
+	for len(v) > len(w.buf)-w.pos {
+		if w.pos == 0 {
+			n, err := w.wtr.Write(v)
+			if err != nil {
+				return err
+			}
+			v = v[n:]
+		} else {
+			n := copy(w.buf[w.pos:], v)
+			w.pos += n
+			v = v[n:]
+		}
+		if w.pos >= writerSize {
+			err := w.Flush()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// Insert any remaining bytes into the buffer.
+
+	n := copy(w.buf[w.pos:], v)
+
+	// Increment the current buffer position.
+
+	w.pos += n
+
+	// Everything went ok.
+
+	return nil
+
+}
+
+func (w *Writer) writeStringToStringer(i stringer, s string) error {
+
+	// Initialise the underlying buffer if needed.
+
+	if w.buf == nil {
+		w.buf = w.arr[0:]
+	}
+
+	// Write directly to the underlying writer.
+
+	for len(s) > len(w.buf)-w.pos {
+		if w.pos == 0 {
+			n, err := i.WriteString(s)
+			if err != nil {
+				return err
+			}
+			s = s[n:]
+		} else {
+			n := copy(w.buf[w.pos:], s)
+			w.pos += n
+			s = s[n:]
+		}
+		if w.pos >= writerSize {
+			err := w.Flush()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// Insert any remaining bytes into the buffer.
+
+	n := copy(w.buf[w.pos:], s)
 
 	// Increment the current buffer position.
 

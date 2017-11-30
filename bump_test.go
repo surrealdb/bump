@@ -34,7 +34,7 @@ func init() {
 
 }
 
-func chunkRead(r *Reader, num int) (bit []byte) {
+func chunkReadBytes(r *Reader, num int) (bit []byte) {
 	sze := readerSize
 	beg := int(num / 100)
 	for i := 0; i < beg; i++ {
@@ -64,7 +64,39 @@ func chunkRead(r *Reader, num int) (bit []byte) {
 	return
 }
 
-func chunkWrite(w *Writer, bit []byte) {
+func chunkReadString(r *Reader, num int) (str string) {
+	bit := []byte("")
+	sze := readerSize
+	beg := int(num / 100)
+	for i := 0; i < beg; i++ {
+		p, _ := r.PeekByte()
+		b, _ := r.ReadByte()
+		if p != b {
+			panic("Arrrgh")
+		}
+		bit = append(bit, b)
+	}
+	str = string(bit)
+	for i := beg; i < num; i += sze {
+		if i+sze > num {
+			b, _ := r.ReadString(num - i)
+			str += b
+		} else {
+			b, _ := r.ReadString(sze)
+			str += b
+		}
+	}
+	var e error
+	_, e = r.PeekByte()
+	So(e, ShouldNotBeNil)
+	_, e = r.ReadByte()
+	So(e, ShouldNotBeNil)
+	_, e = r.ReadString(5)
+	So(e, ShouldNotBeNil)
+	return
+}
+
+func chunkWriteBytes(w *Writer, bit []byte) {
 	sze := writerSize
 	beg := int(len(bit) / 100)
 	for i := 0; i < beg; i++ {
@@ -79,12 +111,34 @@ func chunkWrite(w *Writer, bit []byte) {
 	}
 }
 
+func chunkWriteString(w *Writer, bit string) {
+	sze := writerSize
+	beg := int(len(bit) / 100)
+	for i := 0; i < beg; i++ {
+		w.WriteByte(bit[i])
+	}
+	for i := beg; i < len(bit); i += sze {
+		if i+sze > len(bit) {
+			w.WriteString(bit[i:])
+		} else {
+			w.WriteString(bit[i : i+sze])
+		}
+	}
+}
+
 func TestReader(t *testing.T) {
 
 	Convey("Reader should EOF if data length not readable", t, func() {
 		b := bytes.NewReader(jpg)
 		r := NewReader(b)
 		_, e := r.ReadBytes(len(jpg) * 2)
+		So(e, ShouldEqual, io.EOF)
+	})
+
+	Convey("Reader should EOF if data length not readable (as a string)", t, func() {
+		b := bytes.NewReader(jpg)
+		r := NewReader(b)
+		_, e := r.ReadString(len(jpg) * 2)
 		So(e, ShouldEqual, io.EOF)
 	})
 
@@ -97,13 +151,31 @@ func TestReader(t *testing.T) {
 		So(o[len(o)-5:], ShouldResemble, txt[len(txt)-5:])
 	})
 
+	Convey("Reader should read small data from an io.Reader (as a string)", t, func() {
+		b := bytes.NewReader(txt)
+		r := NewReader(b)
+		o, _ := r.ReadString(len(txt))
+		So(len(o), ShouldEqual, len(txt))
+		So(o[0:5], ShouldResemble, string(txt[0:5]))
+		So(o[len(o)-5:], ShouldResemble, string(txt[len(txt)-5:]))
+	})
+
 	Convey("Reader should read small data from an io.Reader (reading in chunks)", t, func() {
 		b := bytes.NewReader(txt)
 		r := NewReader(b)
-		o := chunkRead(r, len(txt))
+		o := chunkReadBytes(r, len(txt))
 		So(len(o), ShouldEqual, len(txt))
 		So(o[0:5], ShouldResemble, txt[0:5])
 		So(o[len(o)-5:], ShouldResemble, txt[len(txt)-5:])
+	})
+
+	Convey("Reader should read small data from an io.Reader (as a string, reading in chunks)", t, func() {
+		b := bytes.NewReader(txt)
+		r := NewReader(b)
+		o := chunkReadString(r, len(txt))
+		So(len(o), ShouldEqual, len(txt))
+		So(o[0:5], ShouldResemble, string(txt[0:5]))
+		So(o[len(o)-5:], ShouldResemble, string(txt[len(txt)-5:]))
 	})
 
 	Convey("Reader should read large data from an io.Reader", t, func() {
@@ -115,13 +187,31 @@ func TestReader(t *testing.T) {
 		So(o[len(o)-5:], ShouldResemble, jpg[len(jpg)-5:])
 	})
 
+	Convey("Reader should read large data from an io.Reader (as a string)", t, func() {
+		b := bytes.NewReader(jpg)
+		r := NewReader(b)
+		o, _ := r.ReadString(len(jpg))
+		So(len(o), ShouldEqual, len(jpg))
+		So(o[0:5], ShouldResemble, string(jpg[0:5]))
+		So(o[len(o)-5:], ShouldResemble, string(jpg[len(jpg)-5:]))
+	})
+
 	Convey("Reader should read large data from an io.Reader (reading in chunks)", t, func() {
 		b := bytes.NewReader(jpg)
 		r := NewReader(b)
-		o := chunkRead(r, len(jpg))
+		o := chunkReadBytes(r, len(jpg))
 		So(len(o), ShouldEqual, len(jpg))
 		So(o[0:5], ShouldResemble, jpg[0:5])
 		So(o[len(o)-5:], ShouldResemble, jpg[len(jpg)-5:])
+	})
+
+	Convey("Reader should read large data from an io.Reader (as a string, reading in chunks)", t, func() {
+		b := bytes.NewReader(jpg)
+		r := NewReader(b)
+		o := chunkReadString(r, len(jpg))
+		So(len(o), ShouldEqual, len(jpg))
+		So(o[0:5], ShouldResemble, string(jpg[0:5]))
+		So(o[len(o)-5:], ShouldResemble, string(jpg[len(jpg)-5:]))
 	})
 
 	// ----------------------------------------------------------------------------------------------------
@@ -129,6 +219,12 @@ func TestReader(t *testing.T) {
 	Convey("Reader should EOF if data length not readable", t, func() {
 		r := NewReaderBytes(jpg)
 		_, e := r.ReadBytes(len(jpg) * 2)
+		So(e, ShouldEqual, io.EOF)
+	})
+
+	Convey("Reader should EOF if data length not readable (as a string)", t, func() {
+		r := NewReaderBytes(jpg)
+		_, e := r.ReadString(len(jpg) * 2)
 		So(e, ShouldEqual, io.EOF)
 	})
 
@@ -140,12 +236,28 @@ func TestReader(t *testing.T) {
 		So(o[len(o)-5:], ShouldResemble, txt[len(txt)-5:])
 	})
 
+	Convey("Reader should read small data from a byte slice (as a string)", t, func() {
+		r := NewReaderBytes(txt)
+		o, _ := r.ReadString(len(txt))
+		So(len(o), ShouldEqual, len(txt))
+		So(o[0:5], ShouldResemble, string(txt[0:5]))
+		So(o[len(o)-5:], ShouldResemble, string(txt[len(txt)-5:]))
+	})
+
 	Convey("Reader should read small data from a byte slice (reading in chunks)", t, func() {
 		r := NewReaderBytes(txt)
-		o := chunkRead(r, len(txt))
+		o := chunkReadBytes(r, len(txt))
 		So(len(o), ShouldEqual, len(txt))
 		So(o[0:5], ShouldResemble, txt[0:5])
 		So(o[len(o)-5:], ShouldResemble, txt[len(txt)-5:])
+	})
+
+	Convey("Reader should read small data from a byte slice (as a string, reading in chunks)", t, func() {
+		r := NewReaderBytes(txt)
+		o := chunkReadString(r, len(txt))
+		So(len(o), ShouldEqual, len(txt))
+		So(o[0:5], ShouldResemble, string(txt[0:5]))
+		So(o[len(o)-5:], ShouldResemble, string(txt[len(txt)-5:]))
 	})
 
 	Convey("Reader should read large data from a byte slice", t, func() {
@@ -156,12 +268,28 @@ func TestReader(t *testing.T) {
 		So(o[len(o)-5:], ShouldResemble, jpg[len(jpg)-5:])
 	})
 
+	Convey("Reader should read large data from a byte slice (as a string)", t, func() {
+		r := NewReaderBytes(jpg)
+		o, _ := r.ReadString(len(jpg))
+		So(len(o), ShouldEqual, len(jpg))
+		So(o[0:5], ShouldResemble, string(jpg[0:5]))
+		So(o[len(o)-5:], ShouldResemble, string(jpg[len(jpg)-5:]))
+	})
+
 	Convey("Reader should read large data from a byte slice (reading in chunks)", t, func() {
 		r := NewReaderBytes(jpg)
-		o := chunkRead(r, len(jpg))
+		o := chunkReadBytes(r, len(jpg))
 		So(len(o), ShouldEqual, len(jpg))
 		So(o[0:5], ShouldResemble, jpg[0:5])
 		So(o[len(o)-5:], ShouldResemble, jpg[len(jpg)-5:])
+	})
+
+	Convey("Reader should read large data from a byte slice (as a string, reading in chunks)", t, func() {
+		r := NewReaderBytes(jpg)
+		o := chunkReadString(r, len(jpg))
+		So(len(o), ShouldEqual, len(jpg))
+		So(o[0:5], ShouldResemble, string(jpg[0:5]))
+		So(o[len(o)-5:], ShouldResemble, string(jpg[len(jpg)-5:]))
 	})
 
 	// ----------------------------------------------------------------------------------------------------
@@ -204,10 +332,30 @@ func TestWriter(t *testing.T) {
 		So(b.Bytes()[b.Len()-5:], ShouldResemble, txt[len(txt)-5:])
 	})
 
+	Convey("Writer should write small data to an io.Writer (as a string)", t, func() {
+		b := bytes.NewBuffer(nil)
+		w := NewWriter(b)
+		w.WriteString(string(txt))
+		w.Flush()
+		So(b.Len(), ShouldEqual, len(txt))
+		So(b.Bytes()[0:5], ShouldResemble, txt[0:5])
+		So(b.Bytes()[b.Len()-5:], ShouldResemble, txt[len(txt)-5:])
+	})
+
 	Convey("Writer should write small data to an io.Writer (writing in chunks)", t, func() {
 		b := bytes.NewBuffer(nil)
 		w := NewWriter(b)
-		chunkWrite(w, txt)
+		chunkWriteBytes(w, txt)
+		w.Flush()
+		So(b.Len(), ShouldEqual, len(txt))
+		So(b.Bytes()[0:5], ShouldResemble, txt[0:5])
+		So(b.Bytes()[b.Len()-5:], ShouldResemble, txt[len(txt)-5:])
+	})
+
+	Convey("Writer should write small data to an io.Writer (as a string, writing in chunks)", t, func() {
+		b := bytes.NewBuffer(nil)
+		w := NewWriter(b)
+		chunkWriteString(w, string(txt))
 		w.Flush()
 		So(b.Len(), ShouldEqual, len(txt))
 		So(b.Bytes()[0:5], ShouldResemble, txt[0:5])
@@ -224,10 +372,30 @@ func TestWriter(t *testing.T) {
 		So(b.Bytes()[b.Len()-5:], ShouldResemble, jpg[len(jpg)-5:])
 	})
 
+	Convey("Writer should write large data to an io.Writer (as a string)", t, func() {
+		b := bytes.NewBuffer(nil)
+		w := NewWriter(b)
+		w.WriteString(string(jpg))
+		w.Flush()
+		So(b.Len(), ShouldEqual, len(jpg))
+		So(b.Bytes()[0:5], ShouldResemble, jpg[0:5])
+		So(b.Bytes()[b.Len()-5:], ShouldResemble, jpg[len(jpg)-5:])
+	})
+
 	Convey("Writer should write large data to an io.Writer (writing in chunks)", t, func() {
 		b := bytes.NewBuffer(nil)
 		w := NewWriter(b)
-		chunkWrite(w, jpg)
+		chunkWriteBytes(w, jpg)
+		w.Flush()
+		So(b.Len(), ShouldEqual, len(jpg))
+		So(b.Bytes()[0:5], ShouldResemble, jpg[0:5])
+		So(b.Bytes()[b.Len()-5:], ShouldResemble, jpg[len(jpg)-5:])
+	})
+
+	Convey("Writer should write large data to an io.Writer (as a string, writing in chunks)", t, func() {
+		b := bytes.NewBuffer(nil)
+		w := NewWriter(b)
+		chunkWriteString(w, string(jpg))
 		w.Flush()
 		So(b.Len(), ShouldEqual, len(jpg))
 		So(b.Bytes()[0:5], ShouldResemble, jpg[0:5])
@@ -246,10 +414,30 @@ func TestWriter(t *testing.T) {
 		So(b[len(b)-5:], ShouldResemble, txt[len(txt)-5:])
 	})
 
+	Convey("Writer should write small data to a nil byte slice and allocate once (as a string)", t, func() {
+		var b []byte
+		w := NewWriterBytes(&b)
+		w.WriteString(string(txt))
+		w.Flush()
+		So(len(b), ShouldEqual, len(txt))
+		So(b[0:5], ShouldResemble, txt[0:5])
+		So(b[len(b)-5:], ShouldResemble, txt[len(txt)-5:])
+	})
+
 	Convey("Writer should write small data to a nil byte slice and allocate once (writing in chunks)", t, func() {
 		var b []byte
 		w := NewWriterBytes(&b)
-		chunkWrite(w, txt)
+		chunkWriteBytes(w, txt)
+		w.Flush()
+		So(len(b), ShouldEqual, len(txt))
+		So(b[0:5], ShouldResemble, txt[0:5])
+		So(b[len(b)-5:], ShouldResemble, txt[len(txt)-5:])
+	})
+
+	Convey("Writer should write small data to a nil byte slice and allocate once (as a string, writing in chunks)", t, func() {
+		var b []byte
+		w := NewWriterBytes(&b)
+		chunkWriteString(w, string(txt))
 		w.Flush()
 		So(len(b), ShouldEqual, len(txt))
 		So(b[0:5], ShouldResemble, txt[0:5])
