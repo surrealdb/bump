@@ -2,6 +2,6 @@ package: github.com/abcum/bump
 import: []
 testImport:
 - package: github.com/smartystreets/goconvey
-  version: ^1.6.2
+  version: ^1.6.3
   subpackages:
   - convey
