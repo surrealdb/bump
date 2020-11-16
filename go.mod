@@ -2,4 +2,8 @@ module github.com/abcum/bump
 
 go 1.13
 
-require github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337
+require (
+	github.com/gopherjs/gopherjs v0.0.0-20200217142428-fce0ec30dd00 // indirect
+	github.com/smartystreets/assertions v1.2.0 // indirect
+	github.com/smartystreets/goconvey v1.6.4
+)
